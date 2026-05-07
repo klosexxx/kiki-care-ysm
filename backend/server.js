@@ -22,19 +22,5 @@ app.use('/api/admin', require('./src/routes/admin'))
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 
-app.get('/api/debug', async (req, res) => {
-  const pool = require('./src/config/db')
-  try {
-    const result = await pool.query('SELECT COUNT(*) FROM products')
-    const db = await pool.query('SELECT current_database()')
-    res.json({
-      products_count: result.rows[0].count,
-      database: db.rows[0].current_database
-    })
-  } catch (err) {
-    res.json({ error: err.message })
-  }
-})
-
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`))
