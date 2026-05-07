@@ -21,11 +21,18 @@ app.use('/api/orders', require('./src/routes/orders'))
 app.use('/api/admin', require('./src/routes/admin'))
 
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://kiki-care-ysm.vercel.app/',
-  ],
+  origin: (origin, callback) => {
+    const allowed = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'https://kiki-care-ysm.vercel.app',
+    ]
+    if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
 }))
 
