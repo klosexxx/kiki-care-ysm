@@ -35,5 +35,9 @@ app.get('/api/debug', async (req, res) => {
   }
 })
 
+app.get('/api/dburl', (req, res) => {
+  res.json({ url: process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':***@') : 'not set' })
+})
+
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`))
