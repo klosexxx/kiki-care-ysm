@@ -20,6 +20,15 @@ app.use('/api/reviews', require('./src/routes/reviews'))
 app.use('/api/orders', require('./src/routes/orders'))
 app.use('/api/admin', require('./src/routes/admin'))
 
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://kiki-care-ysm.vercel.app/',
+  ],
+  credentials: true,
+}))
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 
 const PORT = process.env.PORT || 5000
