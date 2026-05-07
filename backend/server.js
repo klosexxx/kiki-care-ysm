@@ -7,7 +7,7 @@ const path = require('path')
 const app = express()
 
 app.use(helmet({ crossOriginResourcePolicy: false }))
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173'], credentials: true }))
+app.use(cors())
 app.use(express.json())
 app.use('/uploads', express.static(path.join(__dirname, 'src/uploads')))
 
@@ -19,22 +19,6 @@ app.use('/api/wishlist', require('./src/routes/wishlist'))
 app.use('/api/reviews', require('./src/routes/reviews'))
 app.use('/api/orders', require('./src/routes/orders'))
 app.use('/api/admin', require('./src/routes/admin'))
-
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowed = [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'https://kiki-care-ysm.vercel.app',
-    ]
-    if (!origin || allowed.includes(origin) || origin.endsWith('.vercel.app')) {
-      callback(null, true)
-    } else {
-      callback(new Error('Not allowed by CORS'))
-    }
-  },
-  credentials: true,
-}))
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 
