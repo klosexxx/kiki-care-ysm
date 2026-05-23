@@ -10,35 +10,81 @@ async function sendTelegram(message) {
   const url = `https://api.telegram.org/bot${token}/sendMessage`
   const body = JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
   return new Promise((resolve) => {
-    const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    const req = https.request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
     req.write(body)
     req.end()
     req.on('response', resolve)
   })
 }
 
-// Создать заказ
-router.post('/', authMiddleware, async (req, res) => {
+// Создать заказ — доступно всем (гость и авторизованный)
+router.post('/', async (req, res) => {
   const client = await pool.connect()
   try {
-    const { name, phone, email, address, comment, items, total } = req.body
+    const { name, phone, email, address, comment, items, total, is_guest } = req.body
+
+    // Базовая валидация
+    if (!name || !phone || !items || !items.length) {
+      return res.status(400).json({ error: 'Заполните обязательные поля' })
+    }
+
+    // Определяем user_id: если авторизован — берём из токена, иначе null
+    let userId = null
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = require('jsonwebtoken')
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET)
+        userId = decoded.id
+      } catch {
+        // Токен невалиден — оформляем как гость
+        userId = null
+      }
+    }
+
     await client.query('BEGIN')
+
     const orderResult = await client.query(
-      'INSERT INTO orders (user_id, name, phone, email, address, comment, total) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [req.user.id, name, phone, email, address, comment, total]
+      `INSERT INTO orders (user_id, name, phone, email, address, comment, total)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [userId, name, phone, email || null, address, comment || null, total]
     )
     const order = orderResult.rows[0]
+
     for (const item of items) {
       await client.query(
-        'INSERT INTO order_items (order_id, product_id, title, price, quantity, image_url) VALUES ($1,$2,$3,$4,$5,$6)',
-        [order.id, item.product_id, item.title, item.price, item.quantity, item.image]
+        `INSERT INTO order_items (order_id, product_id, title, price, quantity, image_url)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [order.id, item.product_id, item.title, item.price, item.quantity, item.image || null]
       )
     }
-    await client.query('DELETE FROM cart WHERE user_id = $1', [req.user.id])
+
+    // Если авторизован — чистим корзину в БД
+    if (userId) {
+      await client.query('DELETE FROM cart WHERE user_id = $1', [userId])
+    }
+
     await client.query('COMMIT')
 
-    const itemsList = items.map(i => `  • ${i.title} x${i.quantity} — ${i.price * i.quantity} ₽`).join('\n')
-    await sendTelegram(`🛍️ <b>Новый заказ №${order.id}</b>\n👤 ${name}\n📞 ${phone}\n📍 ${address || 'не указан'}\n\n${itemsList}\n\n💰 <b>Итого: ${total} ₽</b>`)
+    // Telegram
+    const guestLabel = userId ? '' : ' (гость)'
+    const itemsList = items
+      .map(i => `  • ${i.title} x${i.quantity} — ${i.price * i.quantity} ₽`)
+      .join('\n')
+
+    await sendTelegram(
+      `🛍️ <b>Новый заказ №${order.id}${guestLabel}</b>\n` +
+      `👤 ${name}\n` +
+      `📞 ${phone}\n` +
+      `📧 ${email || '—'}\n` +
+      `📍 ${address || 'не указан'}\n` +
+      `💬 ${comment || '—'}\n\n` +
+      `${itemsList}\n\n` +
+      `💰 <b>Итого: ${total} ₽</b>`
+    )
 
     res.json({ success: true, order })
   } catch (err) {
@@ -50,7 +96,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 })
 
-// История заказов
+// История заказов — только авторизованным
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const orders = await pool.query(
@@ -58,7 +104,10 @@ router.get('/', authMiddleware, async (req, res) => {
       [req.user.id]
     )
     for (const order of orders.rows) {
-      const items = await pool.query('SELECT * FROM order_items WHERE order_id = $1', [order.id])
+      const items = await pool.query(
+        'SELECT * FROM order_items WHERE order_id = $1',
+        [order.id]
+      )
       order.items = items.rows
     }
     res.json(orders.rows)

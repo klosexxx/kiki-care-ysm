@@ -33,6 +33,12 @@
   .section-title {
     @apply font-heading text-3xl md:text-4xl font-light lowercase tracking-tight;
   }
+  .icon-btn {
+  @apply p-2.5 rounded-xl text-gray-400 hover:text-dark hover:bg-gray-50 transition-all duration-200 relative flex items-center justify-center;
+}
+.badge {
+  @apply absolute -top-0.5 -right-0.5 bg-dark text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center leading-none font-medium;
+}
 }
 
 /* Анимации появления */

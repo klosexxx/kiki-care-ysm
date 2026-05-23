@@ -3,6 +3,7 @@ import { ShoppingBag, Heart, User, LogOut, Menu, X, Shield } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import useStore from '../../store/useStore'
 import api from '../../api/axios'
+import { getGuestCartCount } from '../../utils/guestCart'
 
 const marqueeItems = [
   'бесплатная доставка от 2000 ₽',
@@ -16,21 +17,38 @@ const marqueeItems = [
 export default function Header() {
   const { user, logout, cartCount, wishlistCount, setCartCount, setWishlistCount } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
+  // Тень при скролле
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', handler, { passive: true })
+    return () => window.removeEventListener('scroll', handler)
+  }, [])
+
   const loadCounts = useCallback(async () => {
-  if (!user) return
-  try {
-    const [cart, wish] = await Promise.all([api.get('/cart'), api.get('/wishlist')])
-    setCartCount(cart.data.length)
-    setWishlistCount(wish.data.length)
-  } catch (err) {
-    console.error('Ошибка загрузки счётчиков:', err)
-  }
-}, [user, setCartCount, setWishlistCount])
+    if (!user) {
+      setCartCount(getGuestCartCount())
+      return
+    }
+    try {
+      const [cart, wish] = await Promise.all([api.get('/cart'), api.get('/wishlist')])
+      setCartCount(cart.data.length)
+      setWishlistCount(wish.data.length)
+    } catch (err) {
+      console.error('Ошибка загрузки счётчиков:', err)
+    }
+  }, [user, setCartCount, setWishlistCount])
 
   useEffect(() => { loadCounts() }, [loadCounts])
+
+  useEffect(() => {
+    const handler = () => setCartCount(getGuestCartCount())
+    window.addEventListener('guest-cart-updated', handler)
+    return () => window.removeEventListener('guest-cart-updated', handler)
+  }, [setCartCount])
 
   const handleLogout = () => { logout(); navigate('/') }
 
@@ -41,8 +59,12 @@ export default function Header() {
     { to: '/stores', label: 'магазины' },
   ]
 
+  const isActive = (to) =>
+    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
+
   return (
-    <header className="bg-white sticky top-0 z-50">
+    <header className={`bg-white sticky top-0 z-50 transition-shadow duration-300 ${scrolled ? 'shadow-md' : ''}`}>
+
       {/* Бегущая строка */}
       <div className="bg-dark text-white text-xs py-2 overflow-hidden">
         <div className="marquee-track">
@@ -56,58 +78,91 @@ export default function Header() {
 
       {/* Основная шапка */}
       <div className="border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/" className="font-heading text-3xl font-light tracking-widest text-dark hover:text-primary transition-colors">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between gap-8">
+
+          {/* Логотип */}
+          <Link
+            to="/"
+            className="font-heading text-3xl font-light tracking-widest text-dark hover:text-primary transition-colors shrink-0"
+          >
             kiki care
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
+          {/* Навигация — центр */}
+          <nav className="hidden md:flex items-center gap-1">
             {navLinks.map(link => (
               <Link
                 key={link.to}
                 to={link.to}
-                className={`text-sm tracking-wider transition-colors lowercase ${location.pathname === link.to ? 'text-primary border-b border-primary' : 'text-gray-500 hover:text-dark'}`}
+                className={`
+                  relative px-4 py-2 text-sm font-medium tracking-widest lowercase
+                  transition-colors duration-200 rounded-lg
+                  ${isActive(link.to)
+                    ? 'text-dark bg-light'
+                    : 'text-gray-400 hover:text-dark hover:bg-gray-50'
+                  }
+                `}
               >
                 {link.label}
+                {isActive(link.to) && (
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary rounded-full" />
+                )}
               </Link>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
+          {/* Иконки */}
+          <div className="flex items-center gap-1">
             {user ? (
               <>
-                <Link to="/profile" className="relative p-2 text-gray-500 hover:text-dark transition-colors">
-                  <User size={18} />
+                <Link to="/profile" className="icon-btn" title="Профиль">
+                  <User size={20} />
                 </Link>
-                <Link to="/cart" className="relative p-2 text-gray-500 hover:text-dark transition-colors">
-                  <ShoppingBag size={18} />
+                <Link to="/cart" className="icon-btn relative" title="Корзина">
+                  <ShoppingBag size={20} />
                   {cartCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 bg-dark text-white text-xs w-4 h-4 rounded-full flex items-center justify-center leading-none">
-                      {cartCount}
-                    </span>
+                    <span className="badge">{cartCount}</span>
                   )}
                 </Link>
-                <Link to="/profile?tab=wishlist" className="relative p-2 text-gray-500 hover:text-dark transition-colors">
-                  <Heart size={18} />
+                <Link to="/profile?tab=wishlist" className="icon-btn relative" title="Избранное">
+                  <Heart size={20} />
                   {wishlistCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 bg-dark text-white text-xs w-4 h-4 rounded-full flex items-center justify-center leading-none">
-                      {wishlistCount}
-                    </span>
+                    <span className="badge">{wishlistCount}</span>
                   )}
                 </Link>
                 {user.role === 'admin' && (
-                  <Link to="/admin" className="p-2 text-gray-500 hover:text-dark transition-colors">
-                    <Shield size={18} />
+                  <Link to="/admin" className="icon-btn" title="Администратор">
+                    <Shield size={20} />
                   </Link>
                 )}
-                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-400 transition-colors">
-                  <LogOut size={18} />
+                <button onClick={handleLogout} className="icon-btn hover:!text-red-400" title="Выйти">
+                  <LogOut size={20} />
                 </button>
               </>
             ) : (
-              <Link to="/login" className="btn-primary text-xs px-5 py-2.5">войти</Link>
+              <>
+                <Link to="/login" className="icon-btn" title="Войти">
+                  <User size={20} />
+                </Link>
+                <Link to="/login" className="icon-btn" title="Избранное">
+                  <Heart size={20} />
+                </Link>
+                <Link to="/cart" className="icon-btn relative" title="Корзина">
+                  <ShoppingBag size={20} />
+                  {cartCount > 0 && (
+                    <span className="badge">{cartCount}</span>
+                  )}
+                </Link>
+                <Link
+                  to="/login"
+                  className="ml-2 btn-primary text-xs px-5 py-2.5 tracking-widest"
+                >
+                  войти
+                </Link>
+              </>
             )}
-            <button className="md:hidden p-2" onClick={() => setMenuOpen(!menuOpen)}>
+
+            <button className="md:hidden icon-btn ml-1" onClick={() => setMenuOpen(!menuOpen)}>
               {menuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
@@ -116,12 +171,37 @@ export default function Header() {
 
       {/* Мобильное меню */}
       {menuOpen && (
-        <div className="md:hidden bg-white border-b border-gray-100 px-4 py-4 animate-fade-in">
+        <div className="md:hidden bg-white border-b border-gray-100 px-6 py-4 animate-fade-in">
           {navLinks.map(link => (
-            <Link key={link.to} to={link.to} className="block py-3 text-sm text-gray-600 hover:text-dark border-b border-gray-50 lowercase tracking-wider" onClick={() => setMenuOpen(false)}>
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`block py-3 text-sm border-b border-gray-50 lowercase tracking-widest font-medium transition-colors ${
+                isActive(link.to) ? 'text-dark' : 'text-gray-400 hover:text-dark'
+              }`}
+              onClick={() => setMenuOpen(false)}
+            >
               {link.label}
             </Link>
           ))}
+          {!user && (
+            <div className="pt-4 flex gap-3">
+              <Link
+                to="/login"
+                className="btn-primary text-xs flex-1 text-center py-3 tracking-widest"
+                onClick={() => setMenuOpen(false)}
+              >
+                войти
+              </Link>
+              <Link
+                to="/register"
+                className="btn-outline text-xs flex-1 text-center py-3 tracking-widest"
+                onClick={() => setMenuOpen(false)}
+              >
+                регистрация
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </header>
