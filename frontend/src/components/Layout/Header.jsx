@@ -21,7 +21,6 @@ export default function Header() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Тень при скролле
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 8)
     window.addEventListener('scroll', handler, { passive: true })
@@ -76,8 +75,74 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Основная шапка */}
-      <div className="border-b border-gray-100">
+      {/* ─── МОБИЛЬНАЯ ШАПКА ─── */}
+      <div className="md:hidden border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3">
+
+          {/* Профиль */}
+          <Link
+            to={user ? '/profile' : '/login'}
+            className="icon-btn flex-1 flex justify-center"
+            title="Профиль"
+          >
+            <User size={22} />
+          </Link>
+
+          {/* Избранное */}
+          <Link
+            to={user ? '/profile?tab=wishlist' : '/login'}
+            className="icon-btn flex-1 flex justify-center relative"
+            title="Избранное"
+          >
+            <Heart size={22} />
+            {wishlistCount > 0 && (
+              <span className="badge">{wishlistCount}</span>
+            )}
+          </Link>
+
+          {/* KC — логотип по центру */}
+<Link
+  to="/"
+  className="flex-1 flex justify-center"
+  title="Главная"
+>
+  <span
+    className="w-11 h-11 rounded-full border border-[#b89d7a] flex items-center
+               justify-center hover:border-primary transition-colors shrink-0"
+  >
+    <span className="font-heading text-[13px] font-light tracking-[0.05em] text-[#7a6a58] flex items-center gap-[3px]">
+      <span>k</span>
+      <span className="w-px h-3 bg-[#b89d7a] inline-block" />
+      <span>c</span>
+    </span>
+  </span>
+</Link>
+
+          {/* Корзина */}
+          <Link
+            to="/cart"
+            className="icon-btn flex-1 flex justify-center relative"
+            title="Корзина"
+          >
+            <ShoppingBag size={22} />
+            {cartCount > 0 && (
+              <span className="badge">{cartCount}</span>
+            )}
+          </Link>
+
+          {/* Бургер */}
+          <button
+            className="icon-btn flex-1 flex justify-center"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+
+        </div>
+      </div>
+
+      {/* ─── ДЕСКТОПНАЯ ШАПКА ─── */}
+      <div className="hidden md:block border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between gap-8">
 
           {/* Логотип */}
@@ -88,8 +153,8 @@ export default function Header() {
             kiki care
           </Link>
 
-          {/* Навигация — центр */}
-          <nav className="hidden md:flex items-center gap-1">
+          {/* Навигация */}
+          <nav className="flex items-center gap-1">
             {navLinks.map(link => (
               <Link
                 key={link.to}
@@ -120,15 +185,11 @@ export default function Header() {
                 </Link>
                 <Link to="/cart" className="icon-btn relative" title="Корзина">
                   <ShoppingBag size={20} />
-                  {cartCount > 0 && (
-                    <span className="badge">{cartCount}</span>
-                  )}
+                  {cartCount > 0 && <span className="badge">{cartCount}</span>}
                 </Link>
                 <Link to="/profile?tab=wishlist" className="icon-btn relative" title="Избранное">
                   <Heart size={20} />
-                  {wishlistCount > 0 && (
-                    <span className="badge">{wishlistCount}</span>
-                  )}
+                  {wishlistCount > 0 && <span className="badge">{wishlistCount}</span>}
                 </Link>
                 {user.role === 'admin' && (
                   <Link to="/admin" className="icon-btn" title="Администратор">
@@ -149,29 +210,23 @@ export default function Header() {
                 </Link>
                 <Link to="/cart" className="icon-btn relative" title="Корзина">
                   <ShoppingBag size={20} />
-                  {cartCount > 0 && (
-                    <span className="badge">{cartCount}</span>
-                  )}
+                  {cartCount > 0 && <span className="badge">{cartCount}</span>}
                 </Link>
-                <Link
-                  to="/login"
-                  className="ml-2 btn-primary text-xs px-5 py-2.5 tracking-widest"
-                >
+                <Link to="/login" className="ml-2 btn-primary text-xs px-5 py-2.5 tracking-widest">
                   войти
                 </Link>
               </>
             )}
-
-            <button className="md:hidden icon-btn ml-1" onClick={() => setMenuOpen(!menuOpen)}>
-              {menuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
           </div>
+
         </div>
       </div>
 
-      {/* Мобильное меню */}
+      {/* ─── МОБИЛЬНОЕ МЕНЮ (выпадашка) ─── */}
       {menuOpen && (
         <div className="md:hidden bg-white border-b border-gray-100 px-6 py-4 animate-fade-in">
+
+          {/* Навигационные ссылки */}
           {navLinks.map(link => (
             <Link
               key={link.to}
@@ -184,6 +239,8 @@ export default function Header() {
               {link.label}
             </Link>
           ))}
+
+          {/* Войти / Регистрация — только для гостей */}
           {!user && (
             <div className="pt-4 flex gap-3">
               <Link
@@ -202,8 +259,20 @@ export default function Header() {
               </Link>
             </div>
           )}
+
+          {/* Выйти — только для авторизованных */}
+          {user && (
+            <button
+              onClick={() => { handleLogout(); setMenuOpen(false) }}
+              className="mt-4 w-full text-left py-3 text-sm text-gray-400 hover:text-red-400 tracking-widest lowercase transition-colors"
+            >
+              выйти
+            </button>
+          )}
+
         </div>
       )}
+
     </header>
   )
 }
