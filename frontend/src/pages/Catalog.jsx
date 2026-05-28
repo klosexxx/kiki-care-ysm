@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { SlidersHorizontal, X, Search } from 'lucide-react'
@@ -6,97 +6,138 @@ import api from '../api/axios'
 import ProductCard from '../components/ProductCard'
 import Pagination from '../components/Pagination'
 import Loader from '../components/Loader'
+import { useState } from 'react'
 
-// ── Вынесен за пределы Catalog — исправляет ошибку static-components ──
-function FiltersContent({ categories, skins, category, skin, brand, maxPrice, updateParam }) {
+const BRANDS = [
+  'JIGOTT', 'CELIMAX', 'Esthetic House', 'LEBELAGE',
+  'Physicians Formula', 'Holika Holika', 'ВИТЭКС', 'LaDor',
+  'Med2b', 'Dr.Althea', "A'pieu", 'ARTDECO',
+  'Snake', 'БЕЛИТА', 'Brazilla', 'RELOUIS',
+  'Mi-Ri-Ne', 'FRUDIA', 'Ekel', 'TOCOBO',
+  'Coco Blues', 'Peach Waterdrop',
+]
+
+const SKINS = [
+  { value: '',            label: 'Все типы' },
+  { value: 'dry',         label: 'Сухая' },
+  { value: 'oily',        label: 'Жирная' },
+  { value: 'combination', label: 'Комбинированная' },
+  { value: 'sensitive',   label: 'Чувствительная' },
+  { value: 'normal',      label: 'Нормальная' },
+  { value: 'mature',      label: 'Зрелая' },
+  { value: 'problem',     label: 'Проблемная' },
+  { value: 'all',         label: 'Универсальная' },
+]
+
+function FilterRow({ label, children }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">{label}</p>
+      {children}
+    </div>
+  )
+}
+
+function RadioItem({ value, current, label, onChange }) {
+  const checked = current === value
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(checked ? '' : value)}
+      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-left transition-colors ${
+        checked
+          ? 'bg-dark text-white'
+          : 'hover:bg-gray-100 text-gray-700'
+      }`}
+    >
+      <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+        checked ? 'border-white' : 'border-gray-300'
+      }`}>
+        {checked && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+      </span>
+      {label}
+    </button>
+  )
+}
+
+function CheckItem({ value, current, label, onChange }) {
+  const checked = current === value
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(checked ? '' : value)}
+      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-left transition-colors ${
+        checked
+          ? 'bg-dark text-white'
+          : 'hover:bg-gray-100 text-gray-700'
+      }`}
+    >
+      <span className={`w-3.5 h-3.5 rounded border-2 shrink-0 flex items-center justify-center ${
+        checked ? 'border-white bg-white/20' : 'border-gray-300'
+      }`}>
+        {checked && (
+          <svg viewBox="0 0 10 10" className="w-2.5 h-2.5" fill="none">
+            <path d="M1.5 5.5 L4 8 L8.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </span>
+      {label}
+    </button>
+  )
+}
+
+function FiltersContent({ categories, category, skin, brand, maxPrice, setParam, resetAll }) {
   return (
     <div className="space-y-6">
 
-      {/* Категория */}
-      <div>
-        <h3 className="font-heading text-lg font-light mb-3 lowercase">категория</h3>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="category"
-              checked={!category}
-              onChange={() => updateParam('category', '')}
-              className="accent-primary"
-            />
-            <span className="text-sm">все категории</span>
-          </label>
+      <FilterRow label="Категория">
+        <div className="space-y-0.5">
+          <RadioItem name="category" value="" current={category} label="Все категории" onChange={v => setParam('category', v)} />
           {categories?.map(cat => (
-            <label key={cat.id} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="category"
-                checked={category === cat.slug}
-                onChange={() => updateParam('category', cat.slug)}
-                className="accent-primary"
-              />
-              <span className="text-sm">{cat.name}</span>
-            </label>
+            <RadioItem key={cat.id} name="category" value={cat.slug} current={category} label={cat.name} onChange={v => setParam('category', v)} />
           ))}
         </div>
-      </div>
+      </FilterRow>
 
-      {/* Тип кожи */}
-      <div>
-        <h3 className="font-heading text-lg font-light mb-3 lowercase">тип кожи</h3>
-        <div className="space-y-2">
-          {skins.map(s => (
-            <label key={s.value} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="skin"
-                checked={skin === s.value}
-                onChange={() => updateParam('skin', s.value)}
-                className="accent-primary"
-              />
-              <span className="text-sm">{s.label}</span>
-            </label>
+      <FilterRow label="Тип кожи">
+        <div className="space-y-0.5">
+          {SKINS.map(s => (
+            <RadioItem key={s.value} name="skin" value={s.value} current={skin} label={s.label} onChange={v => setParam('skin', v)} />
           ))}
         </div>
-      </div>
+      </FilterRow>
 
-      {/* Бренд */}
-      <div>
-        <h3 className="font-heading text-lg font-light mb-3 lowercase">бренд</h3>
-        <div className="space-y-2">
-          {['Some By Mi', 'Bielenda', 'Vitex', 'Elizavecca', 'Missha', 'Belkosmex'].map(b => (
-            <label key={b} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={brand === b}
-                onChange={() => updateParam('brand', brand === b ? '' : b)}
-                className="accent-primary"
-              />
-              <span className="text-sm">{b}</span>
-            </label>
+      <FilterRow label="Бренд">
+        <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
+          {BRANDS.map(b => (
+            <CheckItem key={b} value={b} current={brand} label={b} onChange={v => setParam('brand', v)} />
           ))}
         </div>
-      </div>
+      </FilterRow>
 
-      {/* Цена */}
-      <div>
-        <h3 className="font-heading text-lg font-light mb-3 lowercase">
-          цена до: <span className="text-primary">{maxPrice} ₽</span>
-        </h3>
+      <FilterRow label={`Цена до: ${maxPrice} ₽`}>
         <input
           type="range"
           min="0"
           max="5000"
           step="50"
           value={maxPrice}
-          onChange={e => updateParam('maxPrice', e.target.value)}
+          onChange={e => setParam('maxPrice', e.target.value)}
           className="w-full accent-primary"
         />
         <div className="flex justify-between text-xs text-gray-400 mt-1">
           <span>0 ₽</span>
-          <span>5000 ₽</span>
+          <span>5 000 ₽</span>
         </div>
-      </div>
+      </FilterRow>
+
+      <button
+        onClick={resetAll}
+        className="w-full btn-outline text-sm flex items-center justify-center gap-2"
+      >
+        <X size={14} /> Сбросить фильтры
+      </button>
+
     </div>
   )
 }
@@ -114,19 +155,13 @@ export default function Catalog() {
   const sort     = searchParams.get('sort')              || ''
 
   useEffect(() => {
-    const handler = () => {
-      if (window.innerWidth >= 768) setFiltersOpen(false)
-    }
+    const handler = () => { if (window.innerWidth >= 768) setFiltersOpen(false) }
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
 
   useEffect(() => {
-    if (filtersOpen && window.innerWidth < 768) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = filtersOpen && window.innerWidth < 768 ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [filtersOpen])
 
@@ -134,10 +169,13 @@ export default function Catalog() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [page])
 
-  const updateParam = (key, value) => {
+  const setParam = (key, value) => {
     const params = Object.fromEntries(searchParams)
-    if (value) params[key] = value
-    else delete params[key]
+    if (value && !(key === 'maxPrice' && value === '5000')) {
+      params[key] = value
+    } else {
+      delete params[key]
+    }
     params.page = '1'
     setSearchParams(params)
   }
@@ -153,7 +191,9 @@ export default function Catalog() {
     setFiltersOpen(false)
   }
 
-  const hasFilters = category || brand || skin || search
+  const hasFilters = category || brand || skin || search || (maxPrice && maxPrice !== '5000')
+
+  const filterProps = { categories: undefined, category, skin, brand, maxPrice, setParam, resetAll }
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['products', page, category, brand, skin, maxPrice, search, sort],
@@ -167,25 +207,11 @@ export default function Catalog() {
     queryFn: () => api.get('/categories').then(r => r.data),
   })
 
-  const skins = [
-    { value: '',          label: 'Все типы' },
-    { value: 'dry',       label: 'Сухая' },
-    { value: 'oily',      label: 'Жирная' },
-    { value: 'combo',     label: 'Комбинированная' },
-    { value: 'sensitive', label: 'Чувствительная' },
-    { value: 'all',       label: 'Универсальная' },
-  ]
-
-  // Пропсы для FiltersContent
-  const filterProps = { categories, skins, category, skin, brand, maxPrice, updateParam }
-
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
       <div className="mb-8">
         <h1 className="section-title">каталог</h1>
-        <p className="text-gray-400 text-sm mt-1">
-          вся корейская и европейская косметика в одном месте
-        </p>
+        <p className="text-gray-400 text-sm mt-1">вся корейская и европейская косметика в одном месте</p>
       </div>
 
       {/* Панель управления */}
@@ -197,14 +223,14 @@ export default function Catalog() {
             placeholder="Поиск по названию или бренду..."
             className="input pl-10"
             value={search}
-            onChange={e => updateParam('search', e.target.value)}
+            onChange={e => setParam('search', e.target.value)}
           />
         </div>
 
         <select
           className="input max-w-[200px]"
           value={sort}
-          onChange={e => updateParam('sort', e.target.value)}
+          onChange={e => setParam('sort', e.target.value)}
         >
           <option value="">По умолчанию</option>
           <option value="price-asc">Цена: по возрастанию</option>
@@ -239,11 +265,11 @@ export default function Catalog() {
       {/* Контент */}
       <div className="flex gap-8">
 
-        {/* Боковая панель — только десктоп */}
+        {/* Боковая панель — десктоп */}
         {filtersOpen && (
           <aside className="hidden md:block w-64 shrink-0">
             <div className="card p-5 sticky top-24">
-              <FiltersContent {...filterProps} />
+              <FiltersContent {...filterProps} categories={categories} />
             </div>
           </aside>
         )}
@@ -256,12 +282,9 @@ export default function Catalog() {
             <>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm text-gray-400">
-                  найдено:{' '}
-                  <span className="font-medium text-dark">{data?.total || 0}</span> товаров
+                  найдено: <span className="font-medium text-dark">{data?.total || 0}</span> товаров
                   {data?.pages > 1 && (
-                    <span className="ml-2 text-gray-300">
-                      · страница {page} из {data.pages}
-                    </span>
+                    <span className="ml-2 text-gray-300">· страница {page} из {data.pages}</span>
                   )}
                 </p>
                 {isFetching && !isLoading && (
@@ -272,23 +295,17 @@ export default function Catalog() {
               {data?.products?.length === 0 ? (
                 <div className="text-center py-20">
                   <p className="text-gray-400 mb-2">товары не найдены</p>
-                  <p className="text-sm text-gray-300 mb-4">
-                    попробуйте изменить параметры поиска
-                  </p>
-                  <button onClick={resetAll} className="btn-primary">
-                    сбросить фильтры
-                  </button>
+                  <p className="text-sm text-gray-300 mb-4">попробуйте изменить параметры поиска</p>
+                  <button onClick={resetAll} className="btn-primary">сбросить фильтры</button>
                 </div>
               ) : (
-                <div
-                  className={`grid gap-4 items-stretch transition-opacity duration-200 ${
-                    isFetching ? 'opacity-60' : 'opacity-100'
-                  } ${
-                    filtersOpen
-                      ? 'grid-cols-2 lg:grid-cols-3'
-                      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                  }`}
-                >
+                <div className={`grid gap-4 items-stretch transition-opacity duration-200 ${
+                  isFetching ? 'opacity-60' : 'opacity-100'
+                } ${
+                  filtersOpen
+                    ? 'grid-cols-2 lg:grid-cols-3'
+                    : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                }`}>
                   {data?.products?.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))}
@@ -301,7 +318,7 @@ export default function Catalog() {
         </div>
       </div>
 
-      {/* Модальное окно фильтров — только мобильные */}
+      {/* Мобильное меню фильтров */}
       {filtersOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-white">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
@@ -315,16 +332,13 @@ export default function Catalog() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-6">
-            <FiltersContent {...filterProps} />
+            <FiltersContent {...filterProps} categories={categories} />
           </div>
 
-          <div className="shrink-0 px-5 py-4 border-t border-gray-100 flex gap-3 bg-white">
-            <button onClick={resetAll} className="btn-outline flex-1">
-              Сбросить
-            </button>
+          <div className="shrink-0 px-5 py-4 border-t border-gray-100 bg-white">
             <button
               onClick={() => setFiltersOpen(false)}
-              className="btn-primary flex-1"
+              className="btn-primary w-full"
             >
               Показать товары{data?.total ? ` (${data.total})` : ''}
             </button>
