@@ -65,16 +65,49 @@ router.post('/products', adminMiddleware, upload.array('images', 5), async (req,
 })
 
 // Редактировать товар
-router.put('/products/:id', adminMiddleware, async (req, res) => {
+router.put('/products/:id', adminMiddleware, upload.array('images', 5), async (req, res) => {
+  const client = await pool.connect()
   try {
-    const { title, brand, price, old_price, short_desc, description, inci, usage_guide, volume, skin_types, category_id, stock, is_active } = req.body
-    await pool.query(
-      'UPDATE products SET title=$1, brand=$2, price=$3, old_price=$4, short_desc=$5, description=$6, inci=$7, usage_guide=$8, volume=$9, skin_types=$10, category_id=$11, stock=$12, is_active=$13 WHERE id=$14',
-      [title, brand, price, old_price || null, short_desc, description, inci, usage_guide, volume, JSON.parse(skin_types || '[]'), category_id, stock, is_active, req.params.id]
+    const {
+      title, brand, price, old_price, short_desc, description,
+      inci, usage_guide, volume, skin_types, category_id, stock, is_active
+    } = req.body
+
+    await client.query('BEGIN')
+
+    await client.query(
+      `UPDATE products SET
+        title=$1, brand=$2, price=$3, old_price=$4, short_desc=$5,
+        description=$6, inci=$7, usage_guide=$8, volume=$9,
+        skin_types=$10, category_id=$11, stock=$12, is_active=$13
+       WHERE id=$14`,
+      [
+        title, brand, price, old_price || null, short_desc,
+        description, inci, usage_guide, volume,
+        JSON.parse(skin_types || '[]'), category_id, stock, is_active,
+        req.params.id
+      ]
     )
+
+    // Если загружены новые фото — заменяем старые
+    if (req.files && req.files.length > 0) {
+      await client.query('DELETE FROM product_images WHERE product_id = $1', [req.params.id])
+      for (let i = 0; i < req.files.length; i++) {
+        await client.query(
+          'INSERT INTO product_images (product_id, url, is_main, sort_order) VALUES ($1,$2,$3,$4)',
+          [req.params.id, `/uploads/${req.files[i].filename}`, i === 0, i]
+        )
+      }
+    }
+
+    await client.query('COMMIT')
     res.json({ success: true })
-  } catch {
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('PUT /products/:id error:', err)
     res.status(500).json({ error: 'Ошибка сервера' })
+  } finally {
+    client.release()
   }
 })
 
