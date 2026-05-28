@@ -7,6 +7,8 @@ import useStore from '../store/useStore'
 import { getGuestCart, saveGuestCart } from '../utils/guestCart'
 import toast from 'react-hot-toast'
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'
+
 export default function Cart() {
   const { user, setCartCount } = useStore()
   const queryClient = useQueryClient()
@@ -18,7 +20,6 @@ export default function Cart() {
     enabled: !!user,
   })
 
-  // Загружаем избранное авторизованного
   useEffect(() => {
     if (!user) return
     api.get('/wishlist')
@@ -115,14 +116,13 @@ export default function Cart() {
             const key = user ? item.id : item.product_id
             const productId = item.product_id
             const imgSrc = item.image
-              ? `http://localhost:5000${item.image}`
+              ? `${API_BASE}${item.image}`
               : 'https://placehold.co/100x100/faf8f5/c8a882?text=KC'
             const isInWishlist = wishlistIds.includes(productId)
 
             return (
               <div key={key} className="card p-4 flex gap-4">
 
-                {/* Фото */}
                 <Link to={`/product/${productId}`} className="shrink-0">
                   <img
                     src={imgSrc}
@@ -133,8 +133,6 @@ export default function Cart() {
 
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-400 mb-0.5">{item.brand}</p>
-
-                  {/* Название */}
                   <Link
                     to={`/product/${productId}`}
                     className="font-medium text-sm leading-tight hover:text-primary transition-colors line-clamp-2 block mb-2"
@@ -166,7 +164,6 @@ export default function Cart() {
                   </div>
                 </div>
 
-                {/* Действия */}
                 <div className="flex flex-col items-center gap-2 shrink-0">
                   <button
                     onClick={() => toggleWishlist(productId)}

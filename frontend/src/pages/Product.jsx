@@ -9,6 +9,8 @@ import ProductCard from '../components/ProductCard'
 import { getGuestCart, saveGuestCart } from '../utils/guestCart'
 import toast from 'react-hot-toast'
 
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'
+
 export default function Product() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -50,7 +52,6 @@ export default function Product() {
     },
   })
 
-  // inCart и cartItemId вычисляем без state
   const { inCart, cartItemId } = useMemo(() => {
     if (!product) return { inCart: false, cartItemId: null }
     if (user) {
@@ -65,7 +66,6 @@ export default function Product() {
     }
   }, [user, cartData, product, guestCartVersion])
 
-  // Добавить в корзину
   const addToCart = async () => {
     if (user) {
       try {
@@ -97,7 +97,6 @@ export default function Product() {
     }
   }
 
-  // Убрать из корзины
   const removeFromCart = async () => {
     if (user) {
       try {
@@ -118,7 +117,6 @@ export default function Product() {
     }
   }
 
-  // Купить сейчас
   const buyNow = () => {
     navigate('/checkout', {
       state: {
@@ -134,7 +132,6 @@ export default function Product() {
     })
   }
 
-  // Избранное
   const toggleWishlist = async () => {
     if (!user) {
       toast.error('Войдите, чтобы добавить в избранное')
@@ -198,7 +195,7 @@ export default function Product() {
             <img
               src={
                 images[activeImg]
-                  ? `http://localhost:5000${images[activeImg]}`
+                  ? `${API_BASE}${images[activeImg]}`
                   : 'https://placehold.co/600x600/faf8f5/c8a882?text=Kiki+Care'
               }
               alt={product.title}
@@ -215,7 +212,7 @@ export default function Product() {
                     i === activeImg ? 'border-primary' : 'border-transparent hover:border-gray-200'
                   }`}
                 >
-                  <img src={`http://localhost:5000${img}`} alt="" className="w-full h-full object-cover" />
+                  <img src={`${API_BASE}${img}`} alt="" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
@@ -263,8 +260,6 @@ export default function Product() {
 
           {/* Кнопки действий */}
           <div className="flex flex-col gap-3 mb-6">
-
-            {/* Купить сейчас — всегда */}
             <button
               onClick={buyNow}
               className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"
@@ -273,10 +268,8 @@ export default function Product() {
               Купить сейчас
             </button>
 
-            {/* Корзина + избранное */}
             <div className="flex gap-3">
               {inCart ? (
-                // Товар в корзине — две кнопки рядом
                 <>
                   <Link
                     to="/cart"
@@ -294,7 +287,6 @@ export default function Product() {
                   </button>
                 </>
               ) : (
-                // Товара нет в корзине
                 <button
                   onClick={addToCart}
                   className="btn-outline flex-1 flex items-center justify-center gap-2 py-4 text-base"
@@ -304,7 +296,6 @@ export default function Product() {
                 </button>
               )}
 
-              {/* Избранное */}
               <button
                 onClick={toggleWishlist}
                 className={`w-14 flex items-center justify-center border-2 rounded-full transition-colors ${
