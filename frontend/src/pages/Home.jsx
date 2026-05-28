@@ -291,43 +291,58 @@ export default function Home() {
       </section>
 
       {/* ── Категории ── */}
-      {categories?.length > 0 && (
-        <section className="py-24 px-4 bg-white">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-end justify-between mb-14">
-              <div>
-                <p className="text-primary text-xs tracking-[0.25em] uppercase mb-3">ассортимент</p>
-                <h2 className="font-heading text-5xl md:text-6xl font-light lowercase tracking-tight">категории</h2>
-              </div>
-              <Link to="/catalog" className="text-xs text-gray-400 hover:text-dark transition-colors tracking-[0.15em] uppercase flex items-center gap-2">
-                все товары <ArrowRight size={12} />
-              </Link>
-            </div>
+{categories?.length > 0 && (
+  <section className="py-24 px-4 bg-white">
+    <div className="max-w-7xl mx-auto">
+      <div className="flex items-end justify-between mb-14">
+        <div>
+          <p className="text-primary text-xs tracking-[0.25em] uppercase mb-3">ассортимент</p>
+          <h2 className="font-heading text-5xl md:text-6xl font-light lowercase tracking-tight">
+            категории
+          </h2>
+        </div>
+        <Link to="/catalog" className="text-xs text-gray-400 hover:text-dark transition-colors tracking-[0.15em] uppercase flex items-center gap-2">
+          все товары <ArrowRight size={12} />
+        </Link>
+      </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {categories.map((cat, i) => {
-                const Icon = CATEGORY_ICONS[cat.slug] || IconSerums
-                return (
-                  <Link
-                    key={cat.id}
-                    to={`/catalog?category=${cat.slug}`}
-                    className="group overflow-hidden rounded-2xl bg-[#faf8f5] border-2 border-transparent hover:border-primary/30 hover:bg-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col gap-4 animate-fade-up"
-                    style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-white group-hover:bg-primary/10 flex items-center justify-center transition-colors duration-300 text-primary shadow-sm">
-                      <Icon />
-                    </div>
-                    <p className="font-heading text-lg font-light text-dark group-hover:text-primary transition-colors duration-300 lowercase leading-tight">
-                      {cat.name}
-                    </p>
-                    <ArrowRight size={14} className="text-gray-200 group-hover:text-primary group-hover:translate-x-1 transition-all duration-300" />
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        </section>
-      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {categories.map((cat, i) => {
+          const Icon = CATEGORY_ICONS[cat.slug] || IconSerums
+          return (
+            <Link
+              key={cat.id}
+              to={`/catalog?category=${cat.slug}`}
+              className="group relative overflow-hidden rounded-2xl bg-[#faf8f5] border border-gray-100 hover:border-primary/40 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 animate-fade-up"
+              style={{ animationDelay: `${i * 0.08}s`, opacity: 0 }}
+            >
+              {/* Цветной фон при hover */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+              <div className="relative p-6 flex flex-col items-center text-center gap-4 min-h-[160px] justify-center">
+                {/* Иконка — крупная, в кружке */}
+                <div className="w-16 h-16 rounded-2xl bg-white group-hover:bg-primary/10 shadow-sm flex items-center justify-center transition-all duration-300 text-primary group-hover:scale-110 group-hover:shadow-md">
+                  <Icon />
+                </div>
+
+                {/* Название */}
+                <p className="font-heading text-base md:text-lg font-light text-dark group-hover:text-primary transition-colors duration-300 lowercase leading-tight">
+                  {cat.name}
+                </p>
+
+                {/* Стрелка */}
+                <ArrowRight
+                  size={14}
+                  className="text-gray-300 group-hover:text-primary group-hover:translate-x-1 transition-all duration-300"
+                />
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  </section>
+)}
 
       {/* ── Популярные товары ── */}
       <section className="py-24 px-4 bg-light">

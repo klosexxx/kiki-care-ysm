@@ -13,10 +13,6 @@ function sanitize(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\//g, '&#x2F;').trim()
 }
 
-function onlyDigits(value) {
-  return value.replace(/\D/g, '')
-}
-
 export default function Checkout() {
   const { user, setCartCount } = useStore()
   const navigate = useNavigate()
@@ -30,7 +26,7 @@ export default function Checkout() {
   const [errors, setErrors] = useState({})
   const [form, setForm] = useState({
     name: user?.name || '',
-    phone: '',
+    phone: '+7',
     email: user?.email || '',
     address: '',
     comment: '',
@@ -51,20 +47,24 @@ export default function Checkout() {
   const items = getItems()
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
+  const handlePhone = (e) => {
+    let val = e.target.value
+    if (!val.startsWith('+7')) val = '+7'
+    const digits = val.slice(2).replace(/\D/g, '').slice(0, 10)
+    setForm({ ...form, phone: '+7' + digits })
+    if (errors.phone) setErrors({ ...errors, phone: '' })
+  }
+
   const validate = () => {
     const e = {}
-    if (!form.name.trim() || form.name.trim().length < 2) {
+    if (!form.name.trim() || form.name.trim().length < 2)
       e.name = 'введите имя (минимум 2 символа)'
-    }
-    if (!form.phone || form.phone.replace(/\D/g, '').length < 10) {
-      e.phone = 'введите корректный номер телефона'
-    }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    if (!form.phone || form.phone.replace(/\D/g, '').length !== 11)
+      e.phone = 'номер должен содержать ровно 11 цифр (пример: +79001234567)'
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'введите корректный email'
-    }
-    if (!form.address.trim()) {
+    if (!form.address.trim())
       e.address = 'укажите адрес доставки'
-    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -89,11 +89,8 @@ export default function Checkout() {
     onSuccess: (res) => {
       setOrderId(res.data.order.id)
       if (!buyNowItem) {
-        if (user) {
-          queryClient.invalidateQueries(['cart'])
-        } else {
-          saveGuestCart([])
-        }
+        if (user) queryClient.invalidateQueries(['cart'])
+        else saveGuestCart([])
         setCartCount(0)
       }
       setStep(3)
@@ -106,6 +103,7 @@ export default function Checkout() {
     setStep(2)
   }
 
+  // Шаг 3 — успех
   if (step === 3) return (
     <div className="max-w-lg mx-auto px-4 py-24 text-center animate-fade-up">
       <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8">
@@ -114,7 +112,7 @@ export default function Checkout() {
       <h1 className="section-title mb-4">заказ оформлен</h1>
       <p className="text-gray-500 mb-2">заказ №{orderId} успешно создан</p>
       <p className="text-gray-400 text-sm mb-10 leading-relaxed">
-        мы свяжемся с вами по номеру +{form.phone.replace(/\D/g, '')} для подтверждения и уточнения деталей
+        мы свяжемся с вами по номеру {form.phone} для подтверждения и уточнения деталей
       </p>
       <div className="flex gap-3 justify-center flex-wrap">
         <button onClick={() => navigate('/catalog')} className="btn-outline">
@@ -133,6 +131,7 @@ export default function Checkout() {
     </div>
   )
 
+  // Шаг 2 — подтверждение
   if (step === 2) return (
     <div className="max-w-lg mx-auto px-4 py-16 animate-fade-up">
       <h1 className="section-title mb-8">подтверждение</h1>
@@ -147,7 +146,7 @@ export default function Checkout() {
         <div className="space-y-1 mb-6">
           {[
             ['получатель', form.name],
-            ['телефон', '+' + form.phone.replace(/\D/g, '')],
+            ['телефон', form.phone],
             ['email', form.email || '—'],
             ['адрес', form.address],
           ].map(([label, value]) => (
@@ -192,6 +191,7 @@ export default function Checkout() {
     </div>
   )
 
+  // Шаг 1 — форма
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 animate-fade-up">
       <h1 className="section-title mb-10">оформление заказа</h1>
@@ -199,6 +199,7 @@ export default function Checkout() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 card p-8 space-y-5">
 
+          {/* Имя */}
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">имя *</label>
             <input
@@ -215,26 +216,23 @@ export default function Checkout() {
             {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
           </div>
 
+          {/* Телефон */}
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">телефон *</label>
             <input
               className={`input ${errors.phone ? 'border-red-300' : ''}`}
-              placeholder="79001234567"
+              placeholder="+79001234567"
               value={form.phone}
-              maxLength={11}
               inputMode="numeric"
-              onChange={e => {
-                const digits = onlyDigits(e.target.value).slice(0, 11)
-                setForm({ ...form, phone: digits })
-                if (errors.phone) setErrors({ ...errors, phone: '' })
-              }}
+              onChange={handlePhone}
             />
+            <p className="text-gray-400 text-xs mt-1">
+              {form.phone.replace(/\D/g, '').length} / 11 цифр
+            </p>
             {errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone}</p>}
-            {form.phone.length > 0 && !errors.phone && (
-              <p className="text-gray-400 text-xs mt-1">{form.phone.length} / 11 цифр</p>
-            )}
           </div>
 
+          {/* Email */}
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">email</label>
             <input
@@ -251,6 +249,7 @@ export default function Checkout() {
             {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
           </div>
 
+          {/* Адрес */}
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">адрес доставки *</label>
             <input
@@ -266,6 +265,7 @@ export default function Checkout() {
             {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address}</p>}
           </div>
 
+          {/* Комментарий */}
           <div>
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">комментарий</label>
             <textarea
@@ -283,6 +283,7 @@ export default function Checkout() {
           </button>
         </div>
 
+        {/* Итого */}
         <div className="card p-6 h-fit sticky top-24">
           <p className="text-xs text-gray-400 uppercase tracking-wider mb-4">ваш заказ</p>
           <div className="space-y-3 mb-4">
