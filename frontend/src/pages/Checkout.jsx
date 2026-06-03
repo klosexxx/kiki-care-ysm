@@ -15,7 +15,6 @@ function sanitize(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\//g, '&#x2F;').trim()
 }
 
-// Поле адреса для курьера
 function CourierAddressFields({ value, onChange, error }) {
   const parts = value ? value.split('||') : ['', '', '', '']
   const [city, street, house, apt] = parts
@@ -73,16 +72,57 @@ function CourierAddressFields({ value, onChange, error }) {
         </div>
       </div>
       {error && <p className="text-red-400 text-xs">{error}</p>}
-      <p className="text-xs text-gray-400">🚗 Доставка курьером по Москве и Московской области</p>
+      <p className="text-xs text-gray-400">Доставка курьером по Москве и Московской области</p>
     </div>
   )
 }
 
-// Склеиваем поля адреса курьера в строку
+function OtherRegionFields({ value, onChange, error }) {
+  const parts = value ? value.split('||') : ['', '']
+  const [city, street] = parts
+
+  const update = (i, val) => {
+    const next = [...parts]
+    next[i] = val
+    onChange(next.join('||'))
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">город *</label>
+        <input
+          className={`input ${error && !city ? 'border-red-300' : ''}`}
+          placeholder="Екатеринбург"
+          value={city}
+          maxLength={60}
+          onChange={e => update(0, e.target.value)}
+        />
+        {error && !city && <p className="text-red-400 text-xs mt-1">{error}</p>}
+      </div>
+      <div>
+        <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">улица и дом</label>
+        <input
+          className="input"
+          placeholder="ул. Ленина, д. 5, кв. 10 (необязательно)"
+          value={street}
+          maxLength={150}
+          onChange={e => update(1, e.target.value)}
+        />
+      </div>
+      <p className="text-xs text-gray-400">Способ и стоимость доставки уточним при подтверждении заказа</p>
+    </div>
+  )
+}
+
 function buildCourierAddress(raw) {
   const [city, street, house, apt] = (raw || '').split('||')
-  const parts = [city, street, house, apt].filter(Boolean)
-  return parts.join(', ')
+  return [city, street, house, apt].filter(Boolean).join(', ')
+}
+
+function buildOtherAddress(raw) {
+  const [city, street] = (raw || '').split('||')
+  return [city, street].filter(Boolean).join(', ')
 }
 
 export default function Checkout() {
@@ -96,15 +136,11 @@ export default function Checkout() {
   const [step, setStep] = useState(1)
   const [orderId, setOrderId] = useState(null)
   const [errors, setErrors] = useState({})
-
-  // Тип доставки: 'pickup' | 'courier' | 'other'
   const [deliveryType, setDeliveryType] = useState('courier')
-
   const [form, setForm] = useState({
     name: user?.name || '',
     phone: '+7',
     email: user?.email || '',
-    // для courier — raw поля через '||', для остальных — готовая строка
     address: '',
     comment: '',
   })
@@ -132,10 +168,9 @@ export default function Checkout() {
     if (errors.phone) setErrors({ ...errors, phone: '' })
   }
 
-  // Финальный адрес для сохранения
   const getFinalAddress = () => {
     if (deliveryType === 'pickup') return PICKUP_ADDRESS
-    if (deliveryType === 'other') return 'Другой регион — по договорённости'
+    if (deliveryType === 'other') return buildOtherAddress(form.address)
     return buildCourierAddress(form.address)
   }
 
@@ -147,13 +182,15 @@ export default function Checkout() {
       e.phone = 'номер должен содержать ровно 11 цифр'
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'введите корректный email'
-
     if (deliveryType === 'courier') {
       const [city, street, house] = (form.address || '').split('||')
       if (!city?.trim() || !street?.trim() || !house?.trim())
         e.address = 'заполните город, улицу и дом'
     }
-
+    if (deliveryType === 'other') {
+      const [city] = (form.address || '').split('||')
+      if (!city?.trim()) e.address = 'укажите город'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -167,8 +204,11 @@ export default function Checkout() {
       comment: sanitize(form.comment),
       total,
       items: items.map(i => ({
-        product_id: i.product_id, title: i.title,
-        price: i.price, quantity: i.quantity, image: i.image || null,
+        product_id: i.product_id,
+        title: i.title,
+        price: i.price,
+        quantity: i.quantity,
+        image: i.image || null,
       })),
       is_guest: !user,
     }),
@@ -187,6 +227,12 @@ export default function Checkout() {
   const handleNext = () => {
     if (!validate()) return
     setStep(2)
+  }
+
+  const changeDelivery = (type) => {
+    setDeliveryType(type)
+    setForm(f => ({ ...f, address: '' }))
+    setErrors(e => ({ ...e, address: '' }))
   }
 
   // Шаг 3 — успех
@@ -219,12 +265,17 @@ export default function Checkout() {
           <AlertCircle size={20} className="text-primary shrink-0 mt-0.5" />
           <p className="text-sm text-gray-600 leading-relaxed">проверьте данные перед оформлением</p>
         </div>
+
         <div className="space-y-1 mb-6">
           {[
             ['получатель', form.name],
             ['телефон', form.phone],
             ['email', form.email || '—'],
-            ['доставка', deliveryType === 'pickup' ? 'Самовывоз' : deliveryType === 'courier' ? 'Курьер (Москва и МО)' : 'Другой регион'],
+            ['доставка', deliveryType === 'pickup'
+              ? 'Самовывоз'
+              : deliveryType === 'courier'
+              ? 'Курьер (Москва и МО)'
+              : 'Другой регион'],
             ['адрес', getFinalAddress()],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between py-2.5 border-b border-gray-50 text-sm">
@@ -237,6 +288,7 @@ export default function Checkout() {
             <span className="font-bold text-primary text-base">{total} ₽</span>
           </div>
         </div>
+
         <div className="bg-light rounded-xl p-4 mb-6">
           <p className="text-xs text-gray-400 mb-3 uppercase tracking-wider">состав заказа</p>
           <div className="space-y-2">
@@ -248,9 +300,11 @@ export default function Checkout() {
             ))}
           </div>
         </div>
+
         <p className="text-xs text-gray-400 text-center mb-6 leading-relaxed">
           после подтверждения мы свяжемся с вами для согласования оплаты и доставки
         </p>
+
         <div className="flex gap-3">
           <button onClick={() => setStep(1)} className="btn-outline flex-1">изменить</button>
           <button
@@ -269,6 +323,7 @@ export default function Checkout() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 animate-fade-up">
       <h1 className="section-title mb-10">оформление заказа</h1>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 card p-8 space-y-5">
 
@@ -299,7 +354,9 @@ export default function Checkout() {
               inputMode="numeric"
               onChange={handlePhone}
             />
-            <p className="text-gray-400 text-xs mt-1">{form.phone.replace(/\D/g, '').length} / 11 цифр</p>
+            <p className="text-gray-400 text-xs mt-1">
+              {form.phone.replace(/\D/g, '').length} / 11 цифр
+            </p>
             {errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone}</p>}
           </div>
 
@@ -325,12 +382,13 @@ export default function Checkout() {
             <label className="block text-xs text-gray-400 uppercase tracking-wider mb-3">способ получения *</label>
             <div className="space-y-2">
 
-              {/* Самовывоз */}
               <button
                 type="button"
-                onClick={() => { setDeliveryType('pickup'); setForm({ ...form, address: '' }); setErrors({ ...errors, address: '' }) }}
+                onClick={() => changeDelivery('pickup')}
                 className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
-                  deliveryType === 'pickup' ? 'border-dark bg-dark text-white' : 'border-gray-200 hover:border-gray-300'
+                  deliveryType === 'pickup'
+                    ? 'border-dark bg-dark text-white'
+                    : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <Store size={18} className="shrink-0 mt-0.5" />
@@ -342,12 +400,13 @@ export default function Checkout() {
                 </div>
               </button>
 
-              {/* Курьер */}
               <button
                 type="button"
-                onClick={() => { setDeliveryType('courier'); setForm({ ...form, address: '' }); setErrors({ ...errors, address: '' }) }}
+                onClick={() => changeDelivery('courier')}
                 className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
-                  deliveryType === 'courier' ? 'border-dark bg-dark text-white' : 'border-gray-200 hover:border-gray-300'
+                  deliveryType === 'courier'
+                    ? 'border-dark bg-dark text-white'
+                    : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <Truck size={18} className="shrink-0 mt-0.5" />
@@ -359,12 +418,13 @@ export default function Checkout() {
                 </div>
               </button>
 
-              {/* Другой регион */}
               <button
                 type="button"
-                onClick={() => { setDeliveryType('other'); setForm({ ...form, address: '' }); setErrors({ ...errors, address: '' }) }}
+                onClick={() => changeDelivery('other')}
                 className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
-                  deliveryType === 'other' ? 'border-dark bg-dark text-white' : 'border-gray-200 hover:border-gray-300'
+                  deliveryType === 'other'
+                    ? 'border-dark bg-dark text-white'
+                    : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <MapPin size={18} className="shrink-0 mt-0.5" />
@@ -378,27 +438,33 @@ export default function Checkout() {
             </div>
           </div>
 
-          {/* Адрес — только для курьера */}
+          {/* Поля адреса — зависят от типа доставки */}
           {deliveryType === 'courier' && (
             <CourierAddressFields
               value={form.address}
-              onChange={val => { setForm({ ...form, address: val }); if (errors.address) setErrors({ ...errors, address: '' }) }}
+              onChange={val => {
+                setForm({ ...form, address: val })
+                if (errors.address) setErrors({ ...errors, address: '' })
+              }}
               error={errors.address}
             />
           )}
 
-          {/* Самовывоз — показываем адрес */}
           {deliveryType === 'pickup' && (
             <div className="p-4 bg-light rounded-xl text-sm text-gray-600">
-              📍 {PICKUP_ADDRESS}
+              {PICKUP_ADDRESS}
             </div>
           )}
 
-          {/* Другой регион — подсказка */}
           {deliveryType === 'other' && (
-            <div className="p-4 bg-amber-50 rounded-xl text-sm text-amber-700">
-              Мы свяжемся с вами после оформления заказа и уточним способ и стоимость доставки в ваш регион.
-            </div>
+            <OtherRegionFields
+              value={form.address}
+              onChange={val => {
+                setForm({ ...form, address: val })
+                if (errors.address) setErrors({ ...errors, address: '' })
+              }}
+              error={errors.address}
+            />
           )}
 
           {/* Комментарий */}

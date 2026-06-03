@@ -133,8 +133,8 @@ export default function ProductCard({ product }) {
           {/* Десктоп — кнопка при hover */}
           <button
             onClick={toggleCart}
-            className={`absolute bottom-0 left-0 right-0 backdrop-blur-sm text-white text-[11px] tracking-[0.15em] uppercase py-3 items-center justify-center gap-2 transition-all duration-300 hidden md:flex md:translate-y-full md:group-hover:translate-y-0 ${
-              inCart ? 'bg-red-500/90 hover:bg-red-600' : 'bg-dark/90 hover:bg-dark'
+            className={`absolute bottom-0 left-0 right-0 backdrop-blur-sm text-white text-[11px] tracking-[0.15em] uppercase py-3 items-center justify-center gap-2 transition-all duration-300 hidden md:flex md:translate-y-full md:group-hover:translate-y-0
+              ${inCart ? 'bg-primary/90 hover:bg-primary' : 'bg-dark/90 hover:bg-dark'}
             }`}
           >
             {inCart ? <><Check size={13} /> Убрать из корзины</> : <><ShoppingBag size={13} /> В корзину</>}
@@ -178,8 +178,8 @@ export default function ProductCard({ product }) {
             {/* Мобильная кнопка */}
             <button
               onClick={toggleCart}
-              className={`md:hidden p-2.5 rounded-full active:scale-95 transition-all shrink-0 ${
-                inCart ? 'bg-red-500 text-white' : 'bg-dark text-white'
+              className={`md:hidden p-2.5 rounded-full active:scale-95 transition-all shrink-0
+                ${inCart ? 'bg-primary text-white' : 'bg-dark text-white'}
               }`}
               aria-label={inCart ? 'Убрать из корзины' : 'Добавить в корзину'}
             >
