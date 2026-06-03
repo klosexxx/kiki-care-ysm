@@ -6,7 +6,7 @@ const https = require('https')
 async function sendTelegram(message) {
   const token = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_CHAT_ID
-  if (!token || !chatId || token === 'сюда_позже') return
+  if (!token || !chatId) return
   const url = `https://api.telegram.org/bot${token}/sendMessage`
   const body = JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
   return new Promise((resolve) => {
@@ -20,7 +20,7 @@ async function sendTelegram(message) {
   })
 }
 
-// Создать заказ — доступно всем (гость и авторизованный)
+// Создать заказ
 router.post('/', async (req, res) => {
   const client = await pool.connect()
   try {
@@ -31,7 +31,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Заполните обязательные поля' })
     }
 
-    // Определяем user_id: если авторизован — берём из токена, иначе null
     let userId = null
     const authHeader = req.headers.authorization
     if (authHeader && authHeader.startsWith('Bearer ')) {

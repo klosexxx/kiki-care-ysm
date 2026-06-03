@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ShoppingBag, ChevronLeft, Zap, ArrowRight, Heart, X } from 'lucide-react'
+import { ShoppingBag, ChevronLeft, Zap, Heart } from 'lucide-react'
 import api from '../api/axios'
 import useStore from '../store/useStore'
 import StarRating from '../components/StarRating'
@@ -10,12 +10,12 @@ import { getGuestCart, saveGuestCart } from '../utils/guestCart'
 import toast from 'react-hot-toast'
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'
+const MAX_QTY = 10
 
 export default function Product() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, cartCount, setCartCount } = useStore()
-  const [qty, setQty] = useState(1)
   const [activeImg, setActiveImg] = useState(0)
   const [inWishlist, setInWishlist] = useState(false)
   const [guestCartVersion, setGuestCartVersion] = useState(0)
@@ -52,34 +52,49 @@ export default function Product() {
     },
   })
 
-  const { inCart, cartItemId } = useMemo(() => {
-    if (!product) return { inCart: false, cartItemId: null }
+  // inCart + cartItemId + cartQty
+  const { inCart, cartItemId, cartQty } = useMemo(() => {
+    if (!product) return { inCart: false, cartItemId: null, cartQty: 0 }
     if (user) {
       const item = cartData.find(i => i.product_id === product.id)
-      return { inCart: !!item, cartItemId: item?.id || null }
+      return {
+        inCart: !!item,
+        cartItemId: item?.id || null,
+        cartQty: item?.quantity || 0,
+      }
     }
     void guestCartVersion
     const guestCart = getGuestCart()
+    const gItem = guestCart.find(i => i.product_id === product.id)
     return {
-      inCart: guestCart.some(i => i.product_id === product.id),
+      inCart: !!gItem,
       cartItemId: null,
+      cartQty: gItem?.quantity || 0,
     }
   }, [user, cartData, product, guestCartVersion])
 
+  // Добавить / увеличить в корзине
   const addToCart = async () => {
+    if (cartQty >= MAX_QTY) { toast.error('Максимум 10 единиц товара'); return }
+
     if (user) {
       try {
-        await api.post('/cart', { product_id: product.id, quantity: qty })
-        setCartCount(cartCount + qty)
+        if (inCart) {
+          await api.put(`/cart/${cartItemId}`, { quantity: cartQty + 1 })
+        } else {
+          await api.post('/cart', { product_id: product.id, quantity: 1 })
+          setCartCount(cartCount + 1)
+        }
         queryClient.invalidateQueries(['cart'])
-      } catch {
-        toast.error('Ошибка')
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Ошибка')
       }
     } else {
       const cart = getGuestCart()
       const existing = cart.find(i => i.product_id === product.id)
       if (existing) {
-        existing.quantity += qty
+        if (existing.quantity >= MAX_QTY) { toast.error('Максимум 10 единиц'); return }
+        existing.quantity += 1
       } else {
         cart.push({
           product_id: product.id,
@@ -87,36 +102,48 @@ export default function Product() {
           price: product.price,
           brand: product.brand,
           image: product.images?.[0] || '',
-          quantity: qty,
+          quantity: 1,
         })
+        setCartCount(cartCount + 1)
       }
       saveGuestCart(cart)
-      setCartCount(cart.reduce((s, i) => s + i.quantity, 0))
       window.dispatchEvent(new Event('guest-cart-updated'))
       setGuestCartVersion(v => v + 1)
     }
   }
 
+  // Уменьшить / убрать из корзины
   const removeFromCart = async () => {
     if (user) {
       try {
-        await api.delete(`/cart/${cartItemId}`)
-        setCartCount(Math.max(0, cartCount - 1))
+        if (cartQty > 1) {
+          await api.put(`/cart/${cartItemId}`, { quantity: cartQty - 1 })
+        } else {
+          await api.delete(`/cart/${cartItemId}`)
+          setCartCount(Math.max(0, cartCount - 1))
+        }
         queryClient.invalidateQueries(['cart'])
-        toast('Убрано из корзины')
       } catch {
         toast.error('Ошибка')
       }
     } else {
-      const newCart = getGuestCart().filter(i => i.product_id !== product.id)
-      saveGuestCart(newCart)
-      setCartCount(newCart.reduce((s, i) => s + i.quantity, 0))
+      const cart = getGuestCart()
+      const existing = cart.find(i => i.product_id === product.id)
+      if (!existing) return
+      if (existing.quantity > 1) {
+        existing.quantity -= 1
+        saveGuestCart(cart)
+      } else {
+        const newCart = cart.filter(i => i.product_id !== product.id)
+        saveGuestCart(newCart)
+        setCartCount(Math.max(0, cartCount - 1))
+      }
       window.dispatchEvent(new Event('guest-cart-updated'))
       setGuestCartVersion(v => v + 1)
-      toast('Убрано из корзины')
     }
   }
 
+  // Купить сейчас (1 шт.)
   const buyNow = () => {
     navigate('/checkout', {
       state: {
@@ -126,17 +153,14 @@ export default function Product() {
           price: product.price,
           brand: product.brand,
           image: product.images?.[0] || '',
-          quantity: qty,
+          quantity: 1,
         }
       }
     })
   }
 
   const toggleWishlist = async () => {
-    if (!user) {
-      toast.error('Войдите, чтобы добавить в избранное')
-      return
-    }
+    if (!user) { toast.error('Войдите, чтобы добавить в избранное'); return }
     try {
       if (inWishlist) {
         await api.delete(`/wishlist/${product.id}`)
@@ -148,9 +172,7 @@ export default function Product() {
         toast.success('Добавлено в избранное!')
       }
       queryClient.invalidateQueries(['wishlist'])
-    } catch {
-      toast.error('Ошибка')
-    }
+    } catch { toast.error('Ошибка') }
   }
 
   const submitReview = useMutation({
@@ -163,17 +185,13 @@ export default function Product() {
     onError: () => toast.error('Ошибка при добавлении отзыва'),
   })
 
-  if (isLoading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-10 animate-pulse">
-        <div className="h-96 bg-gray-100 rounded-2xl" />
-      </div>
-    )
-  }
+  if (isLoading) return (
+    <div className="max-w-7xl mx-auto px-4 py-10 animate-pulse">
+      <div className="h-96 bg-gray-100 rounded-2xl" />
+    </div>
+  )
 
-  if (!product) {
-    return <div className="text-center py-20">Товар не найден</div>
-  }
+  if (!product) return <div className="text-center py-20">Товар не найден</div>
 
   const images = product.images?.filter(Boolean) || []
   const relatedProducts = related?.products?.filter(p => p.id !== product.id).slice(0, 4) || []
@@ -193,11 +211,7 @@ export default function Product() {
         <div>
           <div className="aspect-square bg-gray-50 rounded-2xl overflow-hidden mb-3">
             <img
-              src={
-                images[activeImg]
-                  ? `${API_BASE}${images[activeImg]}`
-                  : 'https://placehold.co/600x600/faf8f5/c8a882?text=Kiki+Care'
-              }
+              src={images[activeImg] ? `${API_BASE}${images[activeImg]}` : 'https://placehold.co/600x600/faf8f5/c8a882?text=Kiki+Care'}
               alt={product.title}
               className="w-full h-full object-cover"
             />
@@ -240,26 +254,10 @@ export default function Product() {
             <p className="text-gray-600 mb-6 leading-relaxed">{product.short_desc}</p>
           )}
 
-          {/* Количество */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="flex items-center border border-gray-200 rounded-full overflow-hidden">
-              <button
-                onClick={() => setQty(q => Math.max(1, q - 1))}
-                className="px-4 py-2 hover:bg-gray-50 transition-colors text-lg"
-              >−</button>
-              <span className="px-4 py-2 font-medium min-w-[40px] text-center">{qty}</span>
-              <button
-                onClick={() => setQty(q => q + 1)}
-                className="px-4 py-2 hover:bg-gray-50 transition-colors text-lg"
-              >+</button>
-            </div>
-            <span className="text-sm text-gray-400">
-              Итого: <span className="font-semibold text-dark">{product.price * qty} ₽</span>
-            </span>
-          </div>
-
           {/* Кнопки действий */}
           <div className="flex flex-col gap-3 mb-6">
+
+            {/* Купить сейчас */}
             <button
               onClick={buyNow}
               className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-base"
@@ -268,24 +266,29 @@ export default function Product() {
               Купить сейчас
             </button>
 
+            {/* Корзина — счётчик или кнопка */}
             <div className="flex gap-3">
               {inCart ? (
-                <>
-                  <Link
-                    to="/cart"
-                    className="btn-outline flex-1 flex items-center justify-center gap-2 py-4 text-base"
-                  >
-                    <ArrowRight size={18} />
-                    Перейти в корзину
-                  </Link>
+                <div className="flex-1 flex items-center border-2 border-dark rounded-full overflow-hidden h-14">
                   <button
                     onClick={removeFromCart}
-                    className="w-14 flex items-center justify-center border-2 border-gray-200 rounded-full text-gray-400 hover:border-red-300 hover:text-red-400 hover:bg-red-50 transition-colors"
-                    title="Убрать из корзины"
+                    className="px-5 h-full text-2xl hover:bg-gray-50 transition-colors font-light leading-none"
+                    title={cartQty <= 1 ? 'Убрать из корзины' : 'Уменьшить'}
                   >
-                    <X size={18} />
+                    −
                   </button>
-                </>
+                  <span className="flex-1 text-center font-medium text-sm">
+                    {cartQty} шт.
+                  </span>
+                  <button
+                    onClick={addToCart}
+                    disabled={cartQty >= MAX_QTY}
+                    className="px-5 h-full text-2xl hover:bg-gray-50 transition-colors font-light leading-none disabled:opacity-30 disabled:cursor-not-allowed"
+                    title={cartQty >= MAX_QTY ? 'Максимум 10 единиц' : 'Увеличить'}
+                  >
+                    +
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={addToCart}
@@ -296,6 +299,7 @@ export default function Product() {
                 </button>
               )}
 
+              {/* Избранное */}
               <button
                 onClick={toggleWishlist}
                 className={`w-14 flex items-center justify-center border-2 rounded-full transition-colors ${
@@ -308,6 +312,12 @@ export default function Product() {
                 <Heart size={18} fill={inWishlist ? 'currentColor' : 'none'} />
               </button>
             </div>
+
+            {cartQty >= MAX_QTY && (
+              <p className="text-xs text-amber-500 text-center">
+                максимальное количество — 10 единиц
+              </p>
+            )}
           </div>
 
           {product.volume && (

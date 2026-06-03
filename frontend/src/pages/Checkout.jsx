@@ -1,16 +1,88 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Check, AlertCircle } from 'lucide-react'
+import { Check, AlertCircle, Store, Truck, MapPin } from 'lucide-react'
 import api from '../api/axios'
 import useStore from '../store/useStore'
 import { getGuestCart, saveGuestCart } from '../utils/guestCart'
 import toast from 'react-hot-toast'
 
+const PICKUP_ADDRESS = 'Самовывоз: Тучково, ТК «Золотая вертикаль», 2 этаж'
+
 function sanitize(str) {
   return String(str)
     .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\//g, '&#x2F;').trim()
+}
+
+// Поле адреса для курьера
+function CourierAddressFields({ value, onChange, error }) {
+  const parts = value ? value.split('||') : ['', '', '', '']
+  const [city, street, house, apt] = parts
+
+  const update = (i, val) => {
+    const next = [...parts]
+    next[i] = val
+    onChange(next.join('||'))
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">город *</label>
+          <input
+            className={`input ${error && !city ? 'border-red-300' : ''}`}
+            placeholder="Москва"
+            value={city}
+            maxLength={60}
+            onChange={e => update(0, e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">улица *</label>
+          <input
+            className={`input ${error && !street ? 'border-red-300' : ''}`}
+            placeholder="ул. Ленина"
+            value={street}
+            maxLength={100}
+            onChange={e => update(1, e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">дом *</label>
+          <input
+            className={`input ${error && !house ? 'border-red-300' : ''}`}
+            placeholder="д. 10"
+            value={house}
+            maxLength={20}
+            onChange={e => update(2, e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1">квартира</label>
+          <input
+            className="input"
+            placeholder="кв. 5 (необяз.)"
+            value={apt}
+            maxLength={20}
+            onChange={e => update(3, e.target.value)}
+          />
+        </div>
+      </div>
+      {error && <p className="text-red-400 text-xs">{error}</p>}
+      <p className="text-xs text-gray-400">🚗 Доставка курьером по Москве и Московской области</p>
+    </div>
+  )
+}
+
+// Склеиваем поля адреса курьера в строку
+function buildCourierAddress(raw) {
+  const [city, street, house, apt] = (raw || '').split('||')
+  const parts = [city, street, house, apt].filter(Boolean)
+  return parts.join(', ')
 }
 
 export default function Checkout() {
@@ -24,10 +96,15 @@ export default function Checkout() {
   const [step, setStep] = useState(1)
   const [orderId, setOrderId] = useState(null)
   const [errors, setErrors] = useState({})
+
+  // Тип доставки: 'pickup' | 'courier' | 'other'
+  const [deliveryType, setDeliveryType] = useState('courier')
+
   const [form, setForm] = useState({
     name: user?.name || '',
     phone: '+7',
     email: user?.email || '',
+    // для courier — raw поля через '||', для остальных — готовая строка
     address: '',
     comment: '',
   })
@@ -55,16 +132,28 @@ export default function Checkout() {
     if (errors.phone) setErrors({ ...errors, phone: '' })
   }
 
+  // Финальный адрес для сохранения
+  const getFinalAddress = () => {
+    if (deliveryType === 'pickup') return PICKUP_ADDRESS
+    if (deliveryType === 'other') return 'Другой регион — по договорённости'
+    return buildCourierAddress(form.address)
+  }
+
   const validate = () => {
     const e = {}
     if (!form.name.trim() || form.name.trim().length < 2)
       e.name = 'введите имя (минимум 2 символа)'
     if (!form.phone || form.phone.replace(/\D/g, '').length !== 11)
-      e.phone = 'номер должен содержать ровно 11 цифр (пример: +79001234567)'
+      e.phone = 'номер должен содержать ровно 11 цифр'
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'введите корректный email'
-    if (!form.address.trim())
-      e.address = 'укажите адрес доставки'
+
+    if (deliveryType === 'courier') {
+      const [city, street, house] = (form.address || '').split('||')
+      if (!city?.trim() || !street?.trim() || !house?.trim())
+        e.address = 'заполните город, улицу и дом'
+    }
+
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -74,15 +163,12 @@ export default function Checkout() {
       name: sanitize(form.name),
       phone: form.phone.replace(/\D/g, ''),
       email: sanitize(form.email),
-      address: sanitize(form.address),
+      address: sanitize(getFinalAddress()),
       comment: sanitize(form.comment),
       total,
       items: items.map(i => ({
-        product_id: i.product_id,
-        title: i.title,
-        price: i.price,
-        quantity: i.quantity,
-        image: i.image || null,
+        product_id: i.product_id, title: i.title,
+        price: i.price, quantity: i.quantity, image: i.image || null,
       })),
       is_guest: !user,
     }),
@@ -115,18 +201,11 @@ export default function Checkout() {
         мы свяжемся с вами по номеру {form.phone} для подтверждения и уточнения деталей
       </p>
       <div className="flex gap-3 justify-center flex-wrap">
-        <button onClick={() => navigate('/catalog')} className="btn-outline">
-          в каталог
-        </button>
-        {user ? (
-          <button onClick={() => navigate('/profile')} className="btn-primary">
-            мои заказы
-          </button>
-        ) : (
-          <button onClick={() => navigate('/register')} className="btn-primary">
-            создать аккаунт
-          </button>
-        )}
+        <button onClick={() => navigate('/catalog')} className="btn-outline">в каталог</button>
+        {user
+          ? <button onClick={() => navigate('/profile')} className="btn-primary">мои заказы</button>
+          : <button onClick={() => navigate('/register')} className="btn-primary">создать аккаунт</button>
+        }
       </div>
     </div>
   )
@@ -138,17 +217,15 @@ export default function Checkout() {
       <div className="card p-8 mb-6">
         <div className="flex items-start gap-4 mb-6">
           <AlertCircle size={20} className="text-primary shrink-0 mt-0.5" />
-          <p className="text-sm text-gray-600 leading-relaxed">
-            проверьте данные перед оформлением заказа
-          </p>
+          <p className="text-sm text-gray-600 leading-relaxed">проверьте данные перед оформлением</p>
         </div>
-
         <div className="space-y-1 mb-6">
           {[
             ['получатель', form.name],
             ['телефон', form.phone],
             ['email', form.email || '—'],
-            ['адрес', form.address],
+            ['доставка', deliveryType === 'pickup' ? 'Самовывоз' : deliveryType === 'courier' ? 'Курьер (Москва и МО)' : 'Другой регион'],
+            ['адрес', getFinalAddress()],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between py-2.5 border-b border-gray-50 text-sm">
               <span className="text-gray-400">{label}</span>
@@ -160,7 +237,6 @@ export default function Checkout() {
             <span className="font-bold text-primary text-base">{total} ₽</span>
           </div>
         </div>
-
         <div className="bg-light rounded-xl p-4 mb-6">
           <p className="text-xs text-gray-400 mb-3 uppercase tracking-wider">состав заказа</p>
           <div className="space-y-2">
@@ -172,11 +248,9 @@ export default function Checkout() {
             ))}
           </div>
         </div>
-
         <p className="text-xs text-gray-400 text-center mb-6 leading-relaxed">
           после подтверждения мы свяжемся с вами для согласования оплаты и доставки
         </p>
-
         <div className="flex gap-3">
           <button onClick={() => setStep(1)} className="btn-outline flex-1">изменить</button>
           <button
@@ -195,7 +269,6 @@ export default function Checkout() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 animate-fade-up">
       <h1 className="section-title mb-10">оформление заказа</h1>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 card p-8 space-y-5">
 
@@ -226,9 +299,7 @@ export default function Checkout() {
               inputMode="numeric"
               onChange={handlePhone}
             />
-            <p className="text-gray-400 text-xs mt-1">
-              {form.phone.replace(/\D/g, '').length} / 11 цифр
-            </p>
+            <p className="text-gray-400 text-xs mt-1">{form.phone.replace(/\D/g, '').length} / 11 цифр</p>
             {errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone}</p>}
           </div>
 
@@ -249,21 +320,86 @@ export default function Checkout() {
             {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
           </div>
 
-          {/* Адрес */}
+          {/* Способ получения */}
           <div>
-            <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">адрес доставки *</label>
-            <input
-              className={`input ${errors.address ? 'border-red-300' : ''}`}
-              placeholder="Город, улица, дом, квартира"
-              value={form.address}
-              maxLength={200}
-              onChange={e => {
-                setForm({ ...form, address: e.target.value })
-                if (errors.address) setErrors({ ...errors, address: '' })
-              }}
-            />
-            {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address}</p>}
+            <label className="block text-xs text-gray-400 uppercase tracking-wider mb-3">способ получения *</label>
+            <div className="space-y-2">
+
+              {/* Самовывоз */}
+              <button
+                type="button"
+                onClick={() => { setDeliveryType('pickup'); setForm({ ...form, address: '' }); setErrors({ ...errors, address: '' }) }}
+                className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                  deliveryType === 'pickup' ? 'border-dark bg-dark text-white' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Store size={18} className="shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-sm">Самовывоз — бесплатно</p>
+                  <p className={`text-xs mt-0.5 ${deliveryType === 'pickup' ? 'text-white/70' : 'text-gray-400'}`}>
+                    Тучково, ТК «Золотая вертикаль», 2 этаж · пн–вс 10:00–19:00
+                  </p>
+                </div>
+              </button>
+
+              {/* Курьер */}
+              <button
+                type="button"
+                onClick={() => { setDeliveryType('courier'); setForm({ ...form, address: '' }); setErrors({ ...errors, address: '' }) }}
+                className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                  deliveryType === 'courier' ? 'border-dark bg-dark text-white' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <Truck size={18} className="shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-sm">Курьер — Москва и МО</p>
+                  <p className={`text-xs mt-0.5 ${deliveryType === 'courier' ? 'text-white/70' : 'text-gray-400'}`}>
+                    Стоимость и сроки уточняются при подтверждении заказа
+                  </p>
+                </div>
+              </button>
+
+              {/* Другой регион */}
+              <button
+                type="button"
+                onClick={() => { setDeliveryType('other'); setForm({ ...form, address: '' }); setErrors({ ...errors, address: '' }) }}
+                className={`w-full flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                  deliveryType === 'other' ? 'border-dark bg-dark text-white' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <MapPin size={18} className="shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-sm">Другой регион</p>
+                  <p className={`text-xs mt-0.5 ${deliveryType === 'other' ? 'text-white/70' : 'text-gray-400'}`}>
+                    Способ и стоимость доставки — по договорённости
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
+
+          {/* Адрес — только для курьера */}
+          {deliveryType === 'courier' && (
+            <CourierAddressFields
+              value={form.address}
+              onChange={val => { setForm({ ...form, address: val }); if (errors.address) setErrors({ ...errors, address: '' }) }}
+              error={errors.address}
+            />
+          )}
+
+          {/* Самовывоз — показываем адрес */}
+          {deliveryType === 'pickup' && (
+            <div className="p-4 bg-light rounded-xl text-sm text-gray-600">
+              📍 {PICKUP_ADDRESS}
+            </div>
+          )}
+
+          {/* Другой регион — подсказка */}
+          {deliveryType === 'other' && (
+            <div className="p-4 bg-amber-50 rounded-xl text-sm text-amber-700">
+              Мы свяжемся с вами после оформления заказа и уточним способ и стоимость доставки в ваш регион.
+            </div>
+          )}
 
           {/* Комментарий */}
           <div>

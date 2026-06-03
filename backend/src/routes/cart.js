@@ -17,10 +17,21 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 })
 
-// Добавить в корзину
+// Добавить в корзину (макс. 10)
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { product_id, quantity = 1 } = req.body
+
+    // Проверяем текущее кол-во в корзине
+    const existing = await pool.query(
+      'SELECT quantity FROM cart WHERE user_id = $1 AND product_id = $2',
+      [req.user.id, product_id]
+    )
+    const currentQty = existing.rows[0]?.quantity || 0
+    if (currentQty + quantity > 10) {
+      return res.status(400).json({ error: 'Максимум 10 единиц одного товара' })
+    }
+
     await pool.query(`
       INSERT INTO cart (user_id, product_id, quantity)
       VALUES ($1, $2, $3)
@@ -33,10 +44,13 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 })
 
-// Изменить количество
+// Изменить количество (макс. 10)
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { quantity } = req.body
+    if (quantity > 10) {
+      return res.status(400).json({ error: 'Максимум 10 единиц одного товара' })
+    }
     if (quantity < 1) {
       await pool.query('DELETE FROM cart WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])
     } else {
@@ -48,10 +62,23 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 })
 
-// Удалить из корзины
+// Удалить по cart item id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM cart WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])
+    res.json({ success: true })
+  } catch {
+    res.status(500).json({ error: 'Ошибка сервера' })
+  }
+})
+
+// ✅ НОВЫЙ: Удалить по product_id (для ProductCard)
+router.delete('/product/:productId', authMiddleware, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM cart WHERE product_id = $1 AND user_id = $2',
+      [req.params.productId, req.user.id]
+    )
     res.json({ success: true })
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })

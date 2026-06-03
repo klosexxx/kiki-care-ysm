@@ -8,6 +8,7 @@ import { getGuestCart, saveGuestCart } from '../utils/guestCart'
 import toast from 'react-hot-toast'
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'
+const MAX_QTY = 10
 
 export default function Cart() {
   const { user, setCartCount } = useStore()
@@ -34,6 +35,7 @@ export default function Cart() {
   const updateQty = useMutation({
     mutationFn: ({ id, quantity }) => api.put(`/cart/${id}`, { quantity }),
     onSuccess: () => queryClient.invalidateQueries(['cart']),
+    onError: (err) => toast.error(err.response?.data?.error || 'Ошибка'),
   })
 
   const removeItem = useMutation({
@@ -48,7 +50,9 @@ export default function Cart() {
     const cart = getGuestCart()
     const item = cart.find(i => i.product_id === productId)
     if (!item) return
-    item.quantity += delta
+    const newQty = item.quantity + delta
+    if (newQty > MAX_QTY) { toast.error('Максимум 10 единиц'); return }
+    item.quantity = newQty
     const newCart = item.quantity <= 0
       ? cart.filter(i => i.product_id !== productId)
       : cart
@@ -66,10 +70,7 @@ export default function Cart() {
   }
 
   const toggleWishlist = async (productId) => {
-    if (!user) {
-      toast.error('Войдите, чтобы добавить в избранное')
-      return
-    }
+    if (!user) { toast.error('Войдите, чтобы добавить в избранное'); return }
     const isIn = wishlistIds.includes(productId)
     try {
       if (isIn) {
@@ -82,29 +83,23 @@ export default function Cart() {
         toast.success('Добавлено в избранное!')
       }
       queryClient.invalidateQueries(['wishlist'])
-    } catch {
-      toast.error('Ошибка')
-    }
+    } catch { toast.error('Ошибка') }
   }
 
-  if (user && isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-10 animate-pulse">
-        <div className="h-64 bg-gray-100 rounded-2xl" />
-      </div>
-    )
-  }
+  if (user && isLoading) return (
+    <div className="max-w-4xl mx-auto px-4 py-10 animate-pulse">
+      <div className="h-64 bg-gray-100 rounded-2xl" />
+    </div>
+  )
 
-  if (items.length === 0) {
-    return (
-      <div className="text-center py-20">
-        <ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" />
-        <p className="text-gray-400 mb-2">Корзина пуста</p>
-        <p className="text-sm text-gray-300 mb-6">Добавьте товары из каталога</p>
-        <Link to="/catalog" className="btn-primary">В каталог</Link>
-      </div>
-    )
-  }
+  if (items.length === 0) return (
+    <div className="text-center py-20">
+      <ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" />
+      <p className="text-gray-400 mb-2">Корзина пуста</p>
+      <p className="text-sm text-gray-300 mb-6">Добавьте товары из каталога</p>
+      <Link to="/catalog" className="btn-primary">В каталог</Link>
+    </div>
+  )
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
@@ -141,6 +136,7 @@ export default function Cart() {
                   </Link>
 
                   <div className="flex items-center gap-3 flex-wrap">
+                    {/* Счётчик с ограничением 10 */}
                     <div className="flex items-center border border-gray-200 rounded-full overflow-hidden text-sm">
                       <button
                         onClick={() => user
@@ -151,11 +147,18 @@ export default function Cart() {
                       >−</button>
                       <span className="px-3 py-1 min-w-[32px] text-center">{item.quantity}</span>
                       <button
-                        onClick={() => user
-                          ? updateQty.mutate({ id: item.id, quantity: item.quantity + 1 })
-                          : handleGuestQty(productId, 1)
-                        }
-                        className="px-3 py-1 hover:bg-gray-50 transition-colors"
+                        onClick={() => {
+                          if (item.quantity >= MAX_QTY) {
+                            toast.error('Максимум 10 единиц одного товара')
+                            return
+                          }
+                          user
+                            ? updateQty.mutate({ id: item.id, quantity: item.quantity + 1 })
+                            : handleGuestQty(productId, 1)
+                        }}
+                        disabled={item.quantity >= MAX_QTY}
+                        className="px-3 py-1 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={item.quantity >= MAX_QTY ? 'Максимум 10 единиц' : ''}
                       >+</button>
                     </div>
                     <span className="font-semibold text-primary">
@@ -193,6 +196,7 @@ export default function Cart() {
           })}
         </div>
 
+        {/* Итого */}
         <div className="card p-6 h-fit sticky top-24">
           <h3 className="font-semibold mb-4">Итого</h3>
           <div className="flex justify-between mb-2 text-sm">
@@ -203,7 +207,7 @@ export default function Cart() {
           </div>
           <div className="flex justify-between mb-6 text-sm">
             <span className="text-gray-500">Доставка</span>
-            <span className="text-green-500">Бесплатно</span>
+            <span className="text-gray-400 text-xs">уточняется при подтверждении</span>
           </div>
           <div className="flex justify-between font-bold text-lg border-t border-gray-100 pt-4 mb-6">
             <span>К оплате</span>
